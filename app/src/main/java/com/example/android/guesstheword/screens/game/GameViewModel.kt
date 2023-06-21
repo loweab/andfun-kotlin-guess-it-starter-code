@@ -9,7 +9,18 @@ import androidx.lifecycle.ViewModel
 import com.example.android.guesstheword.TAG
 import java.util.concurrent.TimeUnit
 
+private val CORRECT_BUZZ_PATTERN = longArrayOf(100, 100, 100, 100, 100, 100)
+private val PANIC_BUZZ_PATTERN = longArrayOf(0, 200)
+private val GAME_OVER_BUZZ_PATTERN = longArrayOf(0, 2000)
+private val NO_BUZZ_PATTERN = longArrayOf(0)
+
 class GameViewModel : ViewModel(){
+    enum class BuzzType(val pattern: LongArray) {
+        CORRECT(CORRECT_BUZZ_PATTERN),
+        GAME_OVER(GAME_OVER_BUZZ_PATTERN),
+        COUNTDOWN_PANIC(PANIC_BUZZ_PATTERN),
+        NO_BUZZ(NO_BUZZ_PATTERN)
+    }
 
     companion object {
         // These represent different important times
@@ -18,7 +29,9 @@ class GameViewModel : ViewModel(){
         // This is the number of milliseconds in a second
         const val ONE_SECOND = 1000L
         // This is the total time of the game
-        const val COUNTDOWN_TIME = 5000L
+        const val COUNTDOWN_TIME = 20000L
+
+        private const val COUNTDOWN_PANIC_SECONDS = 10L
     }
 
     private val timer : CountDownTimer
@@ -43,20 +56,27 @@ class GameViewModel : ViewModel(){
     val eventGameFinished: LiveData<Boolean>
         get() = _eventGameFinished
 
+    private val _eventBuzz = MutableLiveData<BuzzType>()
+    val eventBuzz: LiveData<BuzzType>
+        get() = _eventBuzz
+
     init {
         Log.i(TAG,"GameViewModel created!")
         resetList()
         nextWord()
         _score.value = 0
-        _word.value = ""
         _eventGameFinished.value = false
 
         timer = object : CountDownTimer(COUNTDOWN_TIME, ONE_SECOND){
             override fun onTick(timeLeft: Long) {
                 _currentTime.value = DateUtils.formatElapsedTime(TimeUnit.MILLISECONDS.toSeconds(timeLeft))
+                if (timeLeft / ONE_SECOND <= COUNTDOWN_PANIC_SECONDS) {
+                    _eventBuzz.value = BuzzType.COUNTDOWN_PANIC
+                }
             }
 
             override fun onFinish() {
+                _eventBuzz.value = BuzzType.GAME_OVER
                 _eventGameFinished.value = true
             }
 
@@ -121,7 +141,12 @@ class GameViewModel : ViewModel(){
 
     fun onCorrect() {
         _score.value = score.value?.plus(1)
+        _eventBuzz.value = BuzzType.CORRECT
         nextWord()
+    }
+
+    fun onBuzzComplete() {
+        _eventBuzz.value = BuzzType.NO_BUZZ
     }
 
     fun onGameFinishComplete(){
